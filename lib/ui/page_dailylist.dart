@@ -100,19 +100,34 @@ class _DailyListPageState extends State<DailyListPage> {
                         ],
                       ),
                     ),
+                    RippleCircleButton(
+                      onTap: () async {
+                        showDatePicker(
+                          context: context,
+                          initialDate: DateTime.now(),
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2100),
+                        ).then((value) {
+                          if (value != null) {
+                            setState(() {
+                              datePicked = DateTime(value.year, value.month, value.day);
+                              initGetTask();
+                            });
+                          }
+                        });
+                      },
+                      child: SvgPicture.asset(Resources.date,
+                          color: Colors.white, width: 20),
+                    ),
                   ],
                 ),
-              ),
-              
-              
-              
+              ),        
               CalendarTimeline(
                 initialDate: datePicked,
                 firstDate: DateTime(2020, 1, 1),
                 lastDate: DateTime(2025, 12, 31),
                 onDateSelected: (date) async {
                   List<DocumentSnapshot> docs = await _getTaskByDate(date!);
-
                   setState(() {
                     datePicked = date;
                     documents.value = docs;
@@ -462,7 +477,6 @@ class _DailyListPageState extends State<DailyListPage> {
         }
       });
 
-      
 
       if (isExist == false && titleController.text.isNotEmpty) {
         await FirebaseFirestore.instance
@@ -497,7 +511,7 @@ class _DailyListPageState extends State<DailyListPage> {
   }
 
   initGetTask() async {
-    List<DocumentSnapshot> tempDocs = await _getTaskByDate(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day));
+    List<DocumentSnapshot> tempDocs = await _getTaskByDate(DateTime(datePicked.year, datePicked.month, datePicked.day));
     documents.value = tempDocs;
   }
 
