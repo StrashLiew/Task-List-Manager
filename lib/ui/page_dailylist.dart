@@ -12,6 +12,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:connectivity/connectivity.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:percent_indicator/circular_percent_indicator.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'dart:async';
 class DailyListPage extends StatefulWidget {
 
@@ -30,6 +32,7 @@ class _DailyListPageState extends State<DailyListPage> {
   DateTime _startDate = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
   DateTime _endDate = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
   bool _saving = false;
+  final ValueNotifier<int> completedTask = ValueNotifier(0);
   var formatter = new DateFormat('yyyy-MM-dd');
   String _connectionStatus = 'Unknown';
   final Connectivity _connectivity = new Connectivity();
@@ -38,7 +41,6 @@ class _DailyListPageState extends State<DailyListPage> {
   final ValueNotifier<List<DocumentSnapshot>> documents =
       ValueNotifier<List<DocumentSnapshot>>([]);
   TextEditingController titleController = TextEditingController();
-
 
   final GlobalKey<ScaffoldMessengerState> _scaffoldKey = new GlobalKey<ScaffoldMessengerState>();
 
@@ -100,6 +102,25 @@ class _DailyListPageState extends State<DailyListPage> {
                         ],
                       ),
                     ),
+                    ValueListenableBuilder<int>(
+                      valueListenable: completedTask,
+                      builder: (context, value, child) => CircularPercentIndicator(
+                        radius: 60.0,
+                        lineWidth: 7.0,
+                        animation: true,
+                        percent: percent(totalTask.value, completedTask.value),
+                        center: Text(
+                          "${(percent(totalTask.value, completedTask.value) * 100).toInt()}%",
+                          style: TextStyle(fontSize: 18.0, color: Colors.black54),
+                        ),
+                        curve: Curves.easeOutExpo,
+                        animationDuration: 3000,
+                        circularStrokeCap: CircularStrokeCap.round,
+                        progressColor: Colors.orange,
+                        backgroundColor: Colors.orange.withAlpha(75),
+                      ),
+                    ),  
+                  SizedBox(width:30),
                     RippleCircleButton(
                       onTap: () async {
                         showDatePicker(
@@ -476,7 +497,8 @@ class _DailyListPageState extends State<DailyListPage> {
           isExist = true;
         }
       });
-
+      
+      final isDone = List<bool>.filled((_endDate.difference(_startDate).inHours / 24).round()+1, false);
 
       if (isExist == false && titleController.text.isNotEmpty) {
         await FirebaseFirestore.instance
@@ -488,6 +510,7 @@ class _DailyListPageState extends State<DailyListPage> {
           "endTime": _endTime.format(context).toString(),
           "startDate": _startDate,
           "endDate": _endDate,
+          "isDone": isDone
         });
 
         titleController.clear();
@@ -532,8 +555,44 @@ class _DailyListPageState extends State<DailyListPage> {
       });
     }    
     totalTask.value = tempDocs.length;
+
+    completedTask.value = _getCompletedTask(date, tempDocs);
+
     return tempDocs;
   }
+
+  _getCompletedTask(DateTime date, List<DocumentSnapshot> tempDocs) {
+    int completedTask = 0;
+
+    tempDocs.forEach((element) {
+      var tempStart = DateTime.fromMillisecondsSinceEpoch(element['startDate'].seconds * 1000);
+      var tempEnd = DateTime.fromMillisecondsSinceEpoch(element['endDate'].seconds * 1000);
+      var tempIsDone = element['isDone'];
+
+      if(tempStart.isBefore(date) || tempStart.isAtSameMomentAs(date)){
+        if(tempEnd.isAfter(date) || tempEnd.isAtSameMomentAs(date)){
+          if(tempIsDone[date.difference(tempStart).inDays] == true){
+            completedTask++;
+          }
+        }
+      }
+    });
+
+    return completedTask;
+  }
+
+  double percent(int totalTasks, int completeTasks) {
+    try {
+      final percentValue = completeTasks / totalTasks;
+      if (percentValue.isNaN || percentValue.isInfinite) {
+        return 0.0;
+      }
+      return percentValue;
+    } catch (_) {
+      return 0.0;
+    }
+  }
+
 
   _showTaskList() {
     return 
@@ -550,12 +609,66 @@ class _DailyListPageState extends State<DailyListPage> {
                 return Slidable(
                   actionPane: new SlidableDrawerActionPane(),
                   actionExtentRatio: 0.25, 
+                  child: GestureDetector(
+                    onTap: () {
+                      var tempIsDone = docs[index]['isDone'];
+                      tempIsDone[datePicked.difference(DateTime.fromMillisecondsSinceEpoch(docs[index]['startDate'].seconds * 1000)).inDays] = !tempIsDone[datePicked.difference(DateTime.fromMillisecondsSinceEpoch(docs[index]['startDate'].seconds * 1000)).inDays];
+                      FirebaseFirestore.instance
+                          .collection("Calendar_"+widget.user.uid)
+                          .doc(docs[index].id)
+                          .update({
+                            "isDone": tempIsDone
+                          }).then((value) {
+                            initGetTask();
+                          });
+                    }, 
+                  child: Container(
+                    height: 70.0,
+                    color: docs[index]['isDone'][datePicked.difference(DateTime.fromMillisecondsSinceEpoch(docs[index]['startDate'].seconds * 1000)).inDays]
+                        ? Color(0xFFF0F0F0)
+                        : Color(0xFFFCFCFC),
+                    child: Padding(
+                      padding: EdgeInsets.only(left: 50.0),
+                      child: Row(
+                        mainAxisAlignment:
+                            MainAxisAlignment.start,
+                        children: <Widget>[
+                          Icon(
+                             docs[index]['isDone'][datePicked.difference(DateTime.fromMillisecondsSinceEpoch(docs[index]['startDate'].seconds * 1000)).inDays]
+                                ? FontAwesomeIcons.checkSquare
+                                : FontAwesomeIcons.square,
+                            color: docs[index]['isDone'][datePicked.difference(DateTime.fromMillisecondsSinceEpoch(docs[index]['startDate'].seconds * 1000)).inDays]
+                                ? Colors.orange
+                                : Colors.black,
+                            size: 20.0,
+                          ),
+                          Padding(
+                            padding:
+                                EdgeInsets.only(left: 30.0),
+                          ),
+                          Flexible(
+                            child: ListTile(
+                              title: Text(docs[index]['task'],
+                                style: docs[index]['isDone'][datePicked.difference(DateTime.fromMillisecondsSinceEpoch(docs[index]['startDate'].seconds * 1000)).inDays]
+                                  ? TextStyle(
+                                      decoration: TextDecoration
+                                          .lineThrough,
+                                      color: Colors.orange,
+                                    )
+                                  : TextStyle(
+                                      color: Colors.black,
+                                    ),
+                                ),
+                              subtitle: Text(docs[index]['startTime'] +
+                                  " - " +
+                                  docs[index]['endTime']),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                   
-                  child: ListTile(
-                    title: Text(docs[index]['task']),
-                    subtitle: Text(docs[index]['startTime'] +
-                        " - " +
-                        docs[index]['endTime']),
                   ),
                   secondaryActions: <Widget>[
                     new IconSlideAction(
@@ -572,8 +685,7 @@ class _DailyListPageState extends State<DailyListPage> {
                     ),
                   ],
                   );
-                
-                
+                    
               },
             );
         }),
