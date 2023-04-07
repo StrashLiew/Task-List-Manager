@@ -32,6 +32,7 @@ class _DailyListPageState extends State<DailyListPage> {
   DateTime _startDate = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
   DateTime _endDate = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
   bool _saving = false;
+  bool _initializing = false;
   final ValueNotifier<int> completedTask = ValueNotifier(0);
   var formatter = new DateFormat('yyyy-MM-dd');
   String _connectionStatus = 'Unknown';
@@ -128,11 +129,12 @@ class _DailyListPageState extends State<DailyListPage> {
                           initialDate: DateTime.now(),
                           firstDate: DateTime(2020),
                           lastDate: DateTime(2100),
-                        ).then((value) {
+                        ).then((value) async{
                           if (value != null) {
+                            datePicked = DateTime(value.year, value.month, value.day);
+                             await initGetTask();
                             setState(() {
-                              datePicked = DateTime(value.year, value.month, value.day);
-                              initGetTask();
+                              
                             });
                           }
                         });
@@ -148,10 +150,11 @@ class _DailyListPageState extends State<DailyListPage> {
                 firstDate: DateTime(2020, 1, 1),
                 lastDate: DateTime(2025, 12, 31),
                 onDateSelected: (date) async {
-                  List<DocumentSnapshot> docs = await _getTaskByDate(date!);
+                  //List<DocumentSnapshot> docs = await _getTaskByDate(date!);
+                  datePicked = DateTime(date!.year, date.month, date.day);
+                  await initGetTask();
                   setState(() {
-                    datePicked = date;
-                    documents.value = docs;
+                    
                   });
                 },
                 leftMargin: 20,
@@ -162,8 +165,7 @@ class _DailyListPageState extends State<DailyListPage> {
                 dotsColor: Color(0xFF333A47),
                 locale: 'en_US',
               ),
-              
-             _showTaskList(),
+               _showTaskList(),
             ],
           ),
         ),
@@ -534,8 +536,10 @@ class _DailyListPageState extends State<DailyListPage> {
   }
 
   initGetTask() async {
+    _initializing = true;
     List<DocumentSnapshot> tempDocs = await _getTaskByDate(DateTime(datePicked.year, datePicked.month, datePicked.day));
     documents.value = tempDocs;
+    _initializing = false;
   }
 
   _getTaskByDate(DateTime date) async {
